@@ -1,6 +1,6 @@
 # JavaScript Testing
 
-1. [Co to jest testowanie](#co-to-jest-testowanie)
+<!-- 1. [Co to jest testowanie](#co-to-jest-testowanie)
 2. [Rodzaje testów automatycznych](#rodzaje-testów-automatycznych)
 3. [Testy jednostkowe](#testy-jednostkowe)
 4. [Test-Driven Development](#test-driven-development-tdd)
@@ -9,7 +9,7 @@
 7. [Pisanie dobrych testów](#pisanie-dobrych-testów)
 8. [Refaktoryzacja kodu pod testy](#refaktoryzacja-kodu-pod-testy)
 9. [Testy integracyjne](#testy-integracyjne)
-10. [Balans pomiędzy testami jednostkowymi a testami integracyjnymi](#balans-pomiędzy-testami-jednostkowymi-a-testami-integracyjnymi)
+10. [Balans pomiędzy testami jednostkowymi a testami integracyjnymi](#balans-pomiędzy-testami-jednostkowymi-a-testami-integracyjnymi) -->
 
 ## Co to jest testowanie
 
@@ -458,5 +458,96 @@ describe.concurrent("User", () => {
   it("should store the provided email value", () => {
     expect(user.email).toBe(testEmail);
   });
+});
+```
+
+## Spies & Mocks - radzenie sobie z impure functions
+
+Pojęcia te odnoszą się do radzenia sobie z efektami ubocznymi (ang. _side effects_) funkcji.
+
+**Spies** - wrappery funkcji lub puste zamienniki funkcji, które pozwalają na śledzenie czy funkcja została wywołana i z jakimi argumentami.
+
+**Mocks** - zamiennik dla różnego rodzaju API, który może dostarczyć zachowania wymaganego do testów, zamiast używać prawdziwego API.
+
+### Spies
+
+**Funkcja generateReportData()**
+
+Jako argument przyjmuje ona funkcję, która ma posłużyć do wypisania tekstu na konsolę.
+
+```js
+export function generateReportData(logFn) {
+  const data = "Some dummy data for this demo app";
+  if (logFn) {
+    logFn(data);
+  }
+
+  return data;
+}
+```
+
+**Test funkcji generateReportData()**
+
+Zamiast przekazywać prawdziwą funkcję, która rzeczywiście wypisze dane na konsolę, utworzono funkcję śledząca funkcję za pomocą `vi.fn()`. Jest to funkcja, która nie robi nic poza śledzeniem czy została wywołana oraz z jakimi argumentami.
+
+```js
+describe("generateReportData()", () => {
+  it("should execute logFn if provided", () => {
+    const logger = vi.fn();
+
+    generateReportData(logger);
+
+    expect(logger).toBeCalled();
+  });
+});
+```
+
+### Mocks
+
+**Funkcja writeData()**
+
+Funkcja tworzy plik w folderze na dysku i zapisuje do niego dane.
+
+```js
+import path from "path";
+import { promises as fs } from "fs";
+
+export default function writeData(data, filename) {
+  const storagePath = path.join(process.cwd(), "data", filename);
+  return fs.writeFile(storagePath, data);
+}
+```
+
+**Test funkcji writeData()**
+
+Test ten w poprawny sposób sprawdza poprawność funkcji jednak w wyniku jej side effectu przy każdym wywołaniu testu dane do pliku na dysku rzeczywiście są zapisywane. Innymi side effectami mogłaby być edycja danych w bazie danych lub wysyłanie requestów do API.
+
+```js
+it("should execute the writeFile method", () => {
+  const testData = "test";
+  const testFileName = "test.txt";
+
+  writeData(testData, testFileName);
+
+  return expect(writeData(testData, testFileName)).resolves.toBeUndefined();
+});
+```
+
+Aby poprawnie przetestować funkcję i jednocześnie zapobiec efektom ubocznym można zamokować obiekt `fs`. Po wywołaniu `vi.mock("fs")` w trakcie wykonywania testów funkcje obiektu `fs` zostaną zamienione na _empty spy functions_. Wtedy można zaimportować rzeczywisty obiekt tak samo jak w kodzie funkcji i bez konsekwencji czy została na nim wywołana konkretna funkcja.
+
+```js
+import { it, expect, vi } from "vitest";
+import writeData from "./io";
+import { promises as fs } from "fs";
+
+vi.mock("fs");
+
+it("should execute the writeFile method", () => {
+  const testData = "test";
+  const testFileName = "test.txt";
+
+  writeData(testData, testFileName);
+
+  expect(fs.writeFile).toBeCalled();
 });
 ```
