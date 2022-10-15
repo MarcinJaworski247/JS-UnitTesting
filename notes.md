@@ -1,4 +1,15 @@
-# JavaScript Unit Testing
+# JavaScript Testing
+
+1. [Co to jest testowanie](#co-to-jest-testowanie)
+2. [Rodzaje testów automatycznych](#rodzaje-testów-automatycznych)
+3. [Testy jednostkowe](#testy-jednostkowe)
+4. [Test-Driven Development](#test-driven-development-tdd)
+5. [Narzędzia do testów automatycznych](#narzędzia-do-testów-automatycznych)
+6. [Co powinno, a co nie powinno być testowane](#co-powinno-a-co-nie-powinno-być-testowane)
+7. [Pisanie dobrych testów](#pisanie-dobrych-testów)
+8. [Refaktoryzacja kodu pod testy](#refaktoryzacja-kodu-pod-testy)
+9. [Testy integracyjne](#testy-integracyjne)
+10. [Balans pomiędzy testami jednostkowymi a testami integracyjnymi](#balans-pomiędzy-testami-jednostkowymi-a-testami-integracyjnymi)
 
 ## Co to jest testowanie
 
@@ -15,14 +26,14 @@ Testy dzielą się na:
 - Integration tests - testowanie połączenia elementów (_unitów_) systemu ze sobą.
 - E2E tests - testowanie całego _flow_ konkretnej operacji, np. operacja wgrania pliku i wysłania do serwera.
 
-## Unit tests
+## Testy jednostkowe
 
-**Unit** - Część aplikacji, możliwie jak najmniejsza. Np. funkcja, klasa, komponent. System składa się z _unitów_. Jeśli wszistkie **unity** zostały pozytywnie przetestowane, to cały system również powinien prawidłowo działać.
+**Unit** - Część aplikacji, możliwie jak najmniejsza. Np. funkcja, klasa, komponent. System składa się z _unitów_. Jeśli wszystkie _unity_ zostały pozytywnie przetestowane, to cały system również powinien prawidłowo działać.
 Testy uruchamia się po wprowadzonych zmianach.
 
 ## Test-Driven Development (TDD)
 
-Framework/ filozofia pisania testów. Polega na rozpoczęciu pracy nad projektem od pisania testów, a dopiero w następnej kolejności właściwego kodu aplikacji.
+Framework/ filozofia tworzenia aplikacji. Polega na rozpoczęciu pracy nad projektem od pisania testów według założeń biznesowych, a dopiero w następnej kolejności właściwego kodu aplikacji.
 
 ## Narzędzia do testów automatycznych
 
@@ -38,3 +49,414 @@ Framework/ filozofia pisania testów. Polega na rozpoczęciu pracy nad projektem
 - Używane do definiowania zpodziewanych wyników testów,
 - sprawdza czy spodziewane wyniki zostały spełnione,
 - np. Jest, Chai
+
+## Co powinno, a co nie powinno być testowane
+
+Testy powinny odnosić się tylko do kodu napisanego przez developera. Nie powinno się testować funkcji pochodzących z zewnętrznych bibliotek czy API przeglądarki lub środowiska uruchomieniowego.
+
+Np. korzystając z fetch() API nie testuje się czy funkcja działa tak jak powinna. Rownież nie testuje się czy odpowiedź zwracana przez serwer jest poprawna. Co można przetestować w takim wypadku to odpowiednią reakcję na otrzymanie różnych responsów lub błędów.
+
+## Pisanie dobrych testów
+
+1. Zastosowanie się do zasady AAA - Arrange Act Assert.
+
+np.
+
+```js
+it("should yield NaN if at least one invalid number is provided", () => {
+  // Arrange
+  const inputs = ["invalid", 1, 2];
+
+  // Act
+  const result = add(inputs);
+
+  // Assert
+  expect(result).toBeNaN();
+});
+```
+
+2. Jeden test powinien testować jedną rzecz - konkretne zachowanie, możliwość.
+
+3. Testy powinny być proste i skupione na sednie działania funkcji.
+
+4. Ilość asercji w teście powinna być niska - najlepiej 1.
+
+## Refaktoryzacja kodu pod testy
+
+Jeśli istnieje funkcja, która wykonuje wiele różnych operacji napisanie do niej dobrych testów może być uciążliwe, trudne. W tym celu takie funkcje można podzielić na mniejsze. Dzięki temu pisanie testów będzie prostsze jak i sam kod będzie bardziej czytelny.
+
+Np.:
+
+```js
+function formSubmitHandler(event) {
+  event.preventDefault();
+  const formData = new FormData(form);
+  const numberInputs = extractNumbers(formData);
+
+  let result = "";
+
+  try {
+    const numbers = [];
+    for (const numberInput of numberInputs) {
+      validateStringNotEmpty(numberInput);
+      const number = transformToNumber(numberInput);
+      validateNumber(number);
+      numbers.push(number);
+    }
+    result = add(numbers).toString();
+  } catch (error) {
+    result = error.message;
+  }
+
+  let resultText = "";
+
+  if (result === "invalid") {
+    resultText = "Invalid input. You must enter valid numbers.";
+  } else if (result !== "no-calc") {
+    resultText = "Result: " + result;
+  }
+
+  output.textContent = resultText;
+}
+```
+
+Kod po refaktoryzacji:
+
+```js
+function extractEnteredValues(form) {
+  const formData = new FormData(form);
+  const numberInputs = extractNumbers(formData);
+
+  return numberInputs;
+}
+
+function calculateResult(numberValues) {
+  let result = "";
+  try {
+    const numbers = cleanNumbers(numberValues);
+
+    result = add(numbers).toString();
+  } catch (error) {
+    result = error.message;
+  }
+
+  return result;
+}
+
+function generateResultText(calculationResult) {
+  let resultText = "";
+
+  if (calculationResult === "invalid") {
+    resultText = "Invalid input. You must enter valid numbers.";
+  } else if (calculationResult !== "no-calc") {
+    resultText = "Result: " + calculationResult;
+  }
+
+  return resultText;
+}
+
+export function outputResult(resultText) {
+  const output = document.getElementById("result");
+
+  output.textContent = resultText;
+}
+
+function formSubmitHandler(event) {
+  event.preventDefault();
+
+  const numberValues = extractEnteredValues(form);
+
+  const result = calculateResult(numberValues);
+
+  const resultText = generateResultText(result);
+
+  outputResult(resultText);
+}
+```
+
+## Testy integracyjne
+
+Testy integracyjne to testy funkcji (_unitów_), które wywołują inne funkcje (_unity_).
+Celem testów integracyjnych jest sprawdzenie czy poszczególne funkcje, z których każda działa prawidłowo, działają również prawidłowo wraz ze sobą.
+
+Np.:
+
+**Funkcja cleanNumbers()**
+
+```js
+export function cleanNumbers(numberInputs) {
+  let numbers = [];
+
+  for (const numberInput of numberInputs) {
+    validateStringNotEmpty(numberInput);
+    const number = transformToNumber(numberInput);
+    validateNumber(number);
+    numbers.push(number);
+  }
+
+  return numbers;
+}
+```
+
+**Testy funkcji cleanNumbers()**
+
+```js
+describe("cleanNumbers()", () => {
+  it("should return an array of number values if an array of string number values is provided", () => {
+    const numberValues = ["1", "2"];
+
+    const cleanedNumbers = cleanNumbers(numberValues);
+
+    expect(cleanedNumbers[0]).toBeTypeOf("number");
+  });
+
+  it("should throw an error if an array with at least one empty string is provided", () => {
+    const numberValues = ["", 2];
+
+    const cleanFn = () => cleanNumbers(numberValues);
+
+    expect(cleanFn).toThrow();
+  });
+});
+```
+
+## Balans pomiędzy testami jednostkowymi a testami integracyjnymi
+
+Powinno się skupić przede wszystkim na testach jednostkowych, jednak nie należy rozbijać niepotrzebnie funkcji na jak najmniejsze tylko po to, by było możliwe napisanie do nich testów jednostkowych.
+
+W przypadku funkcji, które wywołują inne funkcje, należy przygotować testy integracyjne.
+
+W wyniku tego powstanie dużo testów jednostkowych i znacznie mniej testów integracyjnych.
+
+## toBe() vs toEqual()
+
+Poniższy test nie powiedzie się, nawet jeśli funkcja _cleanNumbers()_ działa w 100% prawidłowo.
+
+```js
+it("should return an array of number values if an array of string number values is provided", () => {
+  const numberValues = ["1", "2"];
+
+  const cleanedNumbers = cleanNumbers(numberValues);
+
+  expect(cleanedNumbers).toBe([1, 2]);
+});
+```
+
+Błąd zwrócony przez Vitest to:
+
+```
+AssertionError: expected [ 1, 2 ] to be [ 1, 2 ] // Object.is equality
+```
+
+Powodem jest fakt, że porównywane są nieprymitywne typy, a więc wskaźniki na ich miejsce w pamięci, a nie wartości jakie przechowują.
+
+Aby poprawnie napisać taki test należy użyć funkcji _toEqual()_, która sprawdza same wartości.
+
+```js
+it("should return an array of number values if an array of string number values is provided", () => {
+  const numberValues = ["1", "2"];
+
+  const cleanedNumbers = cleanNumbers(numberValues);
+
+  expect(cleanedNumbers).toEqual([1, 2]);
+});
+```
+
+## Testowanie asynchronicznego kodu
+
+### Callbacks
+
+Funkcja _generateToken()_ wywołuje asynchroniczną funkcję _sign()_ z biblioteki _jsonwebtoken_, która jako ostatni parametr przyjmuje callback.
+
+Poniższy test tej funkcji jest nieprawidłowy. Vitest nie czeka na zakończenie się asynchronicznych wywołań, dlatego funkcja _expect()_ nigdy nie zostanie wywołana. Prowadzi to do tego, że test zawsze się powiedzie, nawet w przypadkach kiedy nie powinien, ponieważ nie znajdzie żadnej asercji.
+
+```js
+it("should generate a token value", () => {
+  const testUserEmail = "test@test.com";
+
+  generateToken(testUserEmail, (err, token) => {
+    expect(token).toBeDefined();
+  });
+});
+```
+
+Aby test był poprawny należy wywołać funkcję _done()_ na koniec asynchronicznych wywołań. Ponadto asercje należy objąć w blok _try..catch_ ponieważ powiadamiają one test o niepowodzeniu poprzez wyrzucenie błędu, a w przypadku asynchronicznych wywołań błąd ten nie zostanie automatycznie złapany.
+
+```js
+it("should generate a token value", (done) => {
+  const testUserEmail = "test@test.com";
+
+  generateToken(testUserEmail, (err, token) => {
+    try {
+      expect(token).toBeDefined();
+      done();
+    } catch (err) {
+      done(err);
+    }
+  });
+});
+```
+
+### Promises
+
+W przypadku testowania funkcji asynchronicznych opartych o Promise są dwa sposoby:
+
+1. Wywołanie testowanej funkcji w asercji - _expect()_ wspiera Promisy
+
+```js
+it("should generate a token value", () => {
+  const testUserEmail = "test@test.com";
+
+  return expect(generateTokenPromise(testUserEmail)).resolves.toBeDefined();
+
+  // w przypadku oczekiwania niepowodzenia Promisa.
+  //   expect(generateTokenPromise(testUserEmail)).rejects.toThrow();
+});
+```
+
+2. Użycie async/await
+
+```js
+it("should generate a token value", async () => {
+  const testUserEmail = "test@test.com";
+
+  const token = await generateTokenPromise(testUserEmail);
+
+  expect(token).toBeDefined();
+});
+```
+
+## Użycie Setup & Cleanup Hooks
+
+Pisząc wiele testów dla jednego _unitu_ może się przydażyć, że w każdym z nich inicuje się takie same wartości.
+
+Np.:
+
+**Klasa User**
+
+```js
+export class User {
+  constructor(email) {
+    this.email = email;
+  }
+
+  updateEmail(newEmail) {
+    this.email = newEmail;
+  }
+
+  clearEmail() {
+    this.email = "";
+  }
+}
+```
+
+**Testy klasy User**
+
+W każdym z testów tworzony jest taki sam obiekt klasy User, z takim samym argumentem przekazanym do konstruktora.
+
+```js
+it("should update the email", () => {
+  const testEmail = "test@test.com";
+  const newTestEmail = "test2@test.com";
+
+  const user = new User(testEmail);
+  user.updateEmail(newTestEmail);
+
+  expect(user.email).toBe(newTestEmail);
+});
+
+it("should have an email property", () => {
+  const testEmail = "test@test.com";
+
+  const user = new User(testEmail);
+
+  expect(user).toHaveProperty("email");
+});
+
+it("should store the provided email value", () => {
+  const testEmail = "test@test.com";
+
+  const user = new User(testEmail);
+
+  expect(user.email).toBe(testEmail);
+});
+```
+
+Aby skrócic kod i nie kopiować tych samych wywołań można użyć _hooków_.
+
+Dostępne w Vitest _hooki_:
+
+- beforeAll
+- beforeEach
+- afterEach
+- afterAll
+
+**Przykład użycia beforeEach**
+
+```js
+let testEmail;
+let user;
+
+beforeEach(() => {
+  testEmail = "test@test.com";
+  user = new User(testEmail);
+});
+
+it("should update the email", () => {
+  const newTestEmail = "test2@test.com";
+
+  user.updateEmail(newTestEmail);
+
+  expect(user.email).toBe(newTestEmail);
+});
+
+it("should have an email property", () => {
+  expect(user).toHaveProperty("email");
+});
+
+it("should store the provided email value", () => {
+  expect(user.email).toBe(testEmail);
+});
+```
+
+## Zrównoleglenie testów
+
+```js
+it.concurrent("should update the email", () => {
+  const newTestEmail = "test2@test.com";
+
+  user.updateEmail(newTestEmail);
+
+  expect(user.email).toBe(newTestEmail);
+});
+
+it.concurrent("should have an email property", () => {
+  expect(user).toHaveProperty("email");
+});
+
+it.concurrent("should store the provided email value", () => {
+  expect(user.email).toBe(testEmail);
+});
+```
+
+lub
+
+```js
+describe.concurrent("User", () => {
+  it("should update the email", () => {
+    const newTestEmail = "test2@test.com";
+
+    user.updateEmail(newTestEmail);
+
+    expect(user.email).toBe(newTestEmail);
+  });
+
+  it("should have an email property", () => {
+    expect(user).toHaveProperty("email");
+  });
+
+  it("should store the provided email value", () => {
+    expect(user.email).toBe(testEmail);
+  });
+});
+```
