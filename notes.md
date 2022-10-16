@@ -551,3 +551,172 @@ it("should execute the writeFile method", () => {
   expect(fs.writeFile).toBeCalled();
 });
 ```
+
+Często zastąpienie funkcji z 3rd party libraries za pomocą _empty spy functions_ jest niewystarczające dla procesu pisania testów. Np. aby sprawdzić, czy funkcję `fs.writeFile()` wywołało się z odpowiednimi argumentami należy zamockować jej działanie własną funkcją.
+
+`fs` jest aliasem importowanego obiektu `promises`. Funkcja `writeFile()` przyjmuje jako parametry ścieżkę do pliku oraz dane i zwraca Promise. Na podstawie tych informacji można zamockować bibliotekę w poniższy sposób:
+
+```js
+import { vi } from "vitest";
+
+export const promises = {
+  writeFile: vi.fn((path, data) => {
+    return new Promise((resolve, reject) => {
+      resolve();
+    });
+  }),
+};
+```
+
+Wtedy można napisać test jak poniżej, który dostarczy potrzebnych do testu funkcjonalności metody `writeFile()` ale nie dokona zapisu pliku na dysku.
+
+```js
+it("should execute the writeFile method", () => {
+  const testData = "test";
+  const testFileName = "test.txt";
+
+  writeData(testData, testFileName);
+
+  expect(fs.writeFile).toBeCalledWith(testFileName, testData);
+});
+```
+
+### \_\_mocks\_\_
+
+Jeśli często używa się takich samych mocków danych funkcji z bibliotek zewnętrznych nie trzeba wklejać ich do każdego pliku z testami. W roocie projektu można utworzyć folder o nazwie \_\_mocks\_\_, a w nim mocki konkretnych funkcji. Np. jeśli chcemy zamockować obiekt fs importowany w taki sposób: `import { promises as fs } from "fs";`, to w katalogu \_\_mocks\_\_ należy utworzyć plik `fs.js`. Podczas przeprowadzania testów Vitest sprawdza katalog \_\_mocks\_\_ i automatycznie mockuje funkcje. W poniżej przedstawionym teście znajduje się import oryginalnego obiektu promises (`import { promises as fs } from "fs";`) ale metoda wykonana na nim pochodzi z pliku `fs.js`.
+
+Plik /\_\_mocks\_\_/fs.js:
+
+```js
+import { vi } from "vitest";
+
+export const promises = {
+  writeFile: vi.fn((path, data) => {
+    return new Promise((resolve, reject) => {
+      resolve();
+    });
+  }),
+};
+```
+
+Plik io.test.js:
+
+```js
+import { it, expect, vi } from "vitest";
+import writeData from "./io";
+import { promises as fs } from "fs";
+
+it("should execute the writeFile method", () => {
+  const testData = "test";
+  const testFileName = "test.txt";
+
+  writeData(testData, testFileName);
+
+  expect(fs.writeFile).toBeCalledWith(testFileName, testData);
+});
+```
+
+### Mockowanie globalnie dostępnych obiektów
+
+W trakcie pisania testu może wystąpić potrzeba zamockowania nie tylko obiektów pochodzących z importowanych zewnętrznych bibliotek, ale też obiektów dostępnych globalnie. Mogą to być np.: funkcja fetch(), obiekt navigator. Do mockowania takich obiektów służy metoda `vi.stubGlobal()`.
+
+Plik http.js:
+
+```js
+export async function sendDataRequest(data) {
+  const response = await fetch("https://dummy-site.dev/posts", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  const responseData = await response.json();
+
+  if (!response.ok) {
+    throw new HttpError(
+      response.status,
+      "Sending the request failed.",
+      responseData
+    );
+  }
+
+  return responseData;
+}
+```
+
+Plik http.test.js:
+
+```js
+import { it, expect, vi } from "vitest";
+import { HttpError } from "./errors";
+import { sendDataRequest } from "./http";
+
+// fetch() mock
+const testResponseData = { testKey: "testData" };
+const testFetch = vi.fn((url, options) => {
+  return new Promise((resolve, reject) => {
+    if (typeof options.body !== "string") {
+      return reject("Not a string.");
+    }
+    const testResponse = {
+      ok: true,
+      status: "testStatus",
+      json() {
+        return new Promise((resolve, reject) => {
+          resolve(testResponseData);
+        });
+      },
+    };
+    resolve(testResponse);
+  });
+});
+
+vi.stubGlobal("fetch", testFetch);
+
+it("should return any available response data", () => {
+  const testData = { key: "test" };
+
+  return expect(sendDataRequest(testData)).resolves.toEqual(testResponseData);
+});
+
+it("should convert the provided data to JSON before sending the request", async () => {
+  const testData = { key: "test" };
+
+  let errorMessage;
+
+  try {
+    await sendDataRequest(testData);
+  } catch (err) {
+    errorMessage = err;
+  }
+
+  expect(errorMessage).not.toBe("Not a string.");
+});
+```
+
+Jeśli w jednym konkretnym teście chcemy użyć nieco inaczej wyglądającego mocka funkcji `fetch()` można to osiągnąć za pomocą metody `mockImplementationOnce()`:
+
+```js
+it("should throw an HttpError in case of non-ok responses", () => {
+  testFetch.mockImplementationOnce((url, options) => {
+    return new Promise((resolve, reject) => {
+      const testResponse = {
+        ok: false,
+        status: "testStatus",
+        json() {
+          return new Promise((resolve, reject) => {
+            resolve(testResponseData);
+          });
+        },
+      };
+      resolve(testResponse);
+    });
+  });
+
+  const testData = { key: "test" };
+
+  return expect(sendDataRequest(testData)).rejects.toBeInstanceOf(HttpError);
+});
+```
