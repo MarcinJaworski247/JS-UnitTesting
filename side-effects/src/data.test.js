@@ -4,7 +4,18 @@ import { generateReportData } from "./data";
 // Użycie spy
 describe("generateReportData()", () => {
   it("should execute logFn if provided", () => {
+    // utworzenie empty spy function
     const logger = vi.fn();
+
+    // można też utworzyć spy function z określonym zachowaniem
+    // const logger = vi.fn(() => {
+    // });
+
+    // Zamockowanie funkcji w konkretny sposób tylko w konkretnym teście.
+    // Mocki z __mocks__ zostają nadpisane.
+    // Po jednym wykonaniu funkcji, wróci ona do bycia empty spy function.
+    // Można też użyć mockImplementation().
+    logger.mockImplementationOnce(() => {});
 
     // generateReportData() przyjmuje jako argument funkcję, która ma posłużyć do wypisania tekstu na konsolę.
     // Zamiast przekazać prawdziwą funkcję w teście to przy pomocy vi.fn() utworzono funkcję,
@@ -16,5 +27,11 @@ describe("generateReportData()", () => {
     generateReportData(logger);
 
     expect(logger).toBeCalled();
+
+    // sprawdzenie czy funkcja została wywołana dwukrotnie
+    // expect(logger).toBeCalledTimes(2);
+
+    // sprawdzenie czy funkcja została wywołana z podanymi argumentami
+    // expect(logger).toBeCalledWith("argument");
   });
 });
