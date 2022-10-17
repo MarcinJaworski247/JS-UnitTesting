@@ -720,3 +720,87 @@ it("should throw an HttpError in case of non-ok responses", () => {
   return expect(sendDataRequest(testData)).rejects.toBeInstanceOf(HttpError);
 });
 ```
+
+## Testowanie frontendu
+
+Używając Vitest można wybrać środowisko, w którym testy zostaną uruchomione.
+Domyślnie jest to Node.js:
+
+- Dostępne są API i moduły Node.js.
+- Nie ma możliwości interakcji z przeglądarką i API przeglądarki.
+
+Jeśli testujemy UI można wybrać jako środowisko **JSDOM**:
+
+- wirtualne środowisko DOM, symuluje zachowanie DOMu w przeglądarce.
+
+Innym środowiskiem do testowania DOMu jest **Happy-DOM**.
+
+Aby zmienić używane środowisko należy dodać do skryptu uruchamiającego testy flagę _--environment_ z nazwą środowiska,
+np. `vitest --run --environment happy-dom`.
+
+Aby skonfigurować środowisko pod testy DOMu należy dodać do virtualnego DOMu (dostarczonego przez _JSDOM_ lub _Happy-DOM_)
+pliki HTML, na których są przeprowadzane operacje w plikach JS (co najmniej index.html).
+
+Poniższy kod prezentuje jak skonfigurować Happy-DOM:
+
+```js
+import { Window } from "happy-dom";
+import fs from "fs";
+import path from "path";
+
+const htmlDocPath = path.join(process.cwd(), "index.html");
+const htmlDocumentContent = fs.readFileSync(htmlDocPath).toString();
+
+const window = new Window();
+const document = window.document;
+document.write(htmlDocumentContent);
+
+vi.stubGlobal("document", document);
+```
+
+Przykład testów DOMu
+
+```js
+import { it, expect, vi, beforeEach } from "vitest";
+
+import { Window } from "happy-dom";
+
+import fs from "fs";
+import path from "path";
+import { showError } from "./dom";
+
+const htmlDocPath = path.join(process.cwd(), "index.html");
+const htmlDocumentContent = fs.readFileSync(htmlDocPath).toString();
+
+const window = new Window();
+const document = window.document;
+
+vi.stubGlobal("document", document);
+
+// Przed każdym testem należy zresetować virtual DOM ponieważ bez tego zmiany wprowadzone w jednym teście
+// znajdują się w VDOM również w kolejnych testach.
+beforeEach(() => {
+  document.body.innerHTML = "";
+  document.write(htmlDocumentContent);
+});
+
+it("should not contain an error paragraph initially", () => {
+  const errorsEl = document.getElementById("errors");
+  const errorParagraph = errorsEl.firstElementChild;
+
+  expect(errorParagraph).toBeNull();
+});
+
+it("should ouput the provided message in the error paragraph", () => {
+  const testErrorMessage = "test error";
+
+  showError(testErrorMessage);
+
+  const errorsEl = document.getElementById("errors");
+  const errorParagraph = errorsEl.firstElementChild;
+
+  expect(errorParagraph.textContent).toBe(testErrorMessage);
+});
+```
+
+Testowanie DOMu może być uciążliwe przez selectowanie elementów, sprawdzanie ich klas czy zawartości. Pomocna może być biblioteka Testing Library, która ułatwia sprawdzanie elementów czy symulowanie eventów.
